@@ -5,6 +5,12 @@
       "file": "stop-details-flag.js",
       "title": "תמרור 505 — דגל תחנה, עם הפקת ראש תחנה ומדבקות שורה",
       "match": ["/Stops/Details/\\d+"]
+    },
+    {
+      "file": "flag-builder-translation.js",
+      "title": "בנאי דגל — חיפוש תרגום ב-GTFS לשדות השפה השנייה",
+      "requires": ["flag-keywords.js", "gtfs-translations.js"],
+      "match": ["/FlagBuilder/(Header|Row)(/|\\?|$)"]
     }
   ]
 }
