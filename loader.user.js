@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TransPoster – סקריפטים
 // @namespace    transposter.urban-digital.co.il
-// @version      1.0.0
+// @version      1.1.0
 // @description  טוען את סקריפטי ההרחבה של TransPoster לפי הדף שפתוח. מתקינים אותו פעם אחת — כל השאר מגיע ומתעדכן מעצמו.
 // @author       Urban Digital
 // @match        https://transposter.urban-digital.co.il/*
@@ -18,9 +18,10 @@
  * installing anything, and a fix reaches them within minutes rather than on the manager's
  * once-a-day update check.
  *
- * Which module runs where is scripts.json. A module is ordinary JavaScript - it needs no
- * version, no metadata and no update mechanism of its own. Only THIS file has a @version,
- * and it only has to be raised when the loader itself changes.
+ * Which module runs where is scripts.json, and so is which shared files it is run with. A
+ * module is ordinary JavaScript - it needs no version, no metadata and no update mechanism of
+ * its own. Only THIS file has a @version, and it only has to be raised when the loader itself
+ * changes.
  *
  * Nothing here is part of TransPoster. The modules use only endpoints the application's own
  * pages already call, with the signed-in user's session, and write nothing back.
@@ -93,10 +94,20 @@
         }
     }
 
-    /** Each module gets a scope of its own, and a module that throws never takes the rest down. */
-    function run(path, source) {
+    /**
+     * A module and the shared files it asked for, run as one piece of code in one scope. That
+     * is what lets a shared file hand the module a function: each module still gets a scope of
+     * its own, so nothing is written to the page's globals and nothing leaks between modules.
+     *
+     * A module that throws never takes the rest down.
+     */
+    function run(path, parts) {
+        const source = parts
+            .map(part => `// ===== ${part.path} =====\n${part.source}`)
+            .join('\n;\n');
+
         try {
-            new Function(source)();
+            new Function(`'use strict';\n${source}\n//# sourceURL=transposter/${path}`)();
         } catch (error) {
             console.error(LOG, `${path}: נפל בזמן ריצה`, error);
         }
@@ -136,8 +147,21 @@
         for (const entry of wanted) {
             const path = `scripts/${entry.file}`;
 
+            // `requires` names files in scripts/shared/. They are listed before the module so
+            // that they run before it, and the same file asked for twice is fetched once.
+            const paths = [
+                ...new Set((entry.requires ?? []).map(name => `scripts/shared/${name}`)),
+                path,
+            ];
+
             try {
-                run(path, await load(path));
+                const parts = [];
+
+                for (const item of paths) {
+                    parts.push({ path: item, source: await load(item) });
+                }
+
+                run(path, parts);
             } catch (error) {
                 console.error(LOG, `${path}: לא נטען`, error);
             }
