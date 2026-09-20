@@ -56,15 +56,6 @@
         SEA: 'ים',
     };
 
-    // Mirrors flag_keywords in the builder's render-preview.js, which in turn mirrors
-    // FlagCaptions on the server. Kept here rather than read off the builder so that reading
-    // the flag never depends on reaching it.
-    const KEYWORDS = {
-        he: { stop: 'תחנה', platform: 'רציף', dropOnly: 'הורדה בלבד', limitedFrequency: 'תדירות מוגבלת', seasonal: 'עונתי' },
-        en: { stop: 'Station', platform: 'Platform', dropOnly: 'Alighting Only', limitedFrequency: 'Limited Frequency', seasonal: 'Seasonal' },
-        ar: { stop: 'محطة', platform: 'منصة', dropOnly: 'للتنزيل فقط', limitedFrequency: 'تردد محدود', seasonal: 'موسمي' },
-    };
-
     const TEXT = {
         tabTitle: 'תמרור 505',
         loading: 'טוען את הדגל…',
@@ -241,7 +232,7 @@
             return null;
         }
 
-        const token = (getAddressPart(source, KEYWORDS.he.platform) ?? source.split('_').pop() ?? '').trim();
+        const token = (getAddressPart(source, TpFlagKeywords.he.platform) ?? source.split('_').pop() ?? '').trim();
 
         return token || null;
     }
@@ -312,7 +303,7 @@
      * destination and gives up its sub-destination.
      */
     function resolveDest(lang, mode, parts) {
-        const words = KEYWORDS[lang];
+        const words = TpFlagKeywords[lang];
 
         switch (mode) {
             case 'drop':
@@ -651,7 +642,7 @@
 
     /** What the head will print under the name: "תחנה 12345", and the platform when there is one. */
     function headSubtitle(lang, stop, platform) {
-        const words = KEYWORDS[lang];
+        const words = TpFlagKeywords[lang];
 
         const parts = [stop.code ? `${words.stop} ${String(stop.code).padStart(5, '0')}` : ''];
 

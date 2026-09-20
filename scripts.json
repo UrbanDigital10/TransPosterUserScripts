@@ -4,6 +4,7 @@
     {
       "file": "stop-details-flag.js",
       "title": "תמרור 505 — דגל תחנה, עם הפקת ראש תחנה ומדבקות שורה",
+      "requires": ["flag-keywords.js"],
       "match": ["/Stops/Details/\\d+"]
     },
     {
