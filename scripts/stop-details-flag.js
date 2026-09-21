@@ -62,6 +62,8 @@
         produceHead: 'הפק ראש תחנה',
         produceRow: 'הפק מדבקת שורה',
         producing: 'מפיק…',
+        edit: 'שנה והפק',
+        editTitle: 'פותח את בנאי הדגל בטאב חדש, מלא מראש בנתוני התחנה. שינוי שם לא נשמר לתיק התחנה.',
         noPlatform: 'ללא רציף',
         platformLabel: 'רציף',
         noRoutes: 'אין קווים בתחנה הזו, ולכן אין דגל להציג.',
@@ -356,8 +358,10 @@
 
             const secondHeadsign = secondaryLang === 'ar' ? route.HeadsignArabic : route.HeadsignEnglish;
 
-            const hebrew = resolveDest('he', mode, splitHeadsign(route.Headsign));
-            const secondary = resolveDest(secondaryLang, mode, splitHeadsign(secondHeadsign));
+            const raw = { hebrew: splitHeadsign(route.Headsign), secondary: splitHeadsign(secondHeadsign) };
+
+            const hebrew = resolveDest('he', mode, raw.hebrew);
+            const secondary = resolveDest(secondaryLang, mode, raw.secondary);
 
             // Grouped on what the Hebrew panel shows, the way the audit card groups its strips:
             // what the reader sees is the only thing that tells rows apart.
@@ -366,7 +370,13 @@
             let strip = strips.get(key);
 
             if (!strip) {
-                strip = { bucket: bucketOf(mode), hebrew, secondary, routes: [] };
+                // The mode and the raw destination are kept for the flag builder, which is
+                // handed the line as it is rather than as it prints: a caption fills a locked
+                // field there, and turning the mode back to regular has to reveal the real
+                // destination underneath. On a captioned strip the lines grouped together can
+                // have had different destinations, and the first one stands for them - it is a
+                // starting point for someone about to edit it, not a statement about the group.
+                strip = { bucket: bucketOf(mode), mode, hebrew, secondary, raw, routes: [] };
                 strips.set(key, strip);
             }
 
@@ -457,6 +467,51 @@
     }
 
     /** The head is one row tall by definition, so it is produced once or not at all. */
+    // ------------------------------------------------------------------ handing a part over
+
+    /**
+     * Where a part goes to be changed before it is printed. The builder is a scratch surface -
+     * it stores nothing and saves nothing - which is what makes it the right place for "the
+     * same as the station, but different": the line that is about to change its destination,
+     * the stop that is about to be renamed. None of that is true of the station yet, and
+     * editing it here must never look like editing the station file.
+     */
+    const BUILDER_PAGE = { header: '/FlagBuilder/Header', row: '/FlagBuilder/Row' };
+
+    const HANDOFF_KEY = 'transposter-userscripts:builder-handoff';
+
+    // A handoff is consumed by the very next builder page to open. Anything older than this was
+    // left behind - a blocked popup, a tab closed on the way - and must not fill a form someone
+    // opened for their own reasons a while later.
+    const HANDOFF_SECONDS = 60;
+
+    /**
+     * Writes the part down and opens the builder on it, in a tab of its own so the station file
+     * stays where it was. localStorage rather than sessionStorage: a tab opened with window.open
+     * only inherits a COPY of session storage, and only when the browser treats it as an
+     * auxiliary context - localStorage is shared across the origin's tabs either way.
+     */
+    function openBuilder(handoff) {
+        try {
+            localStorage.setItem(HANDOFF_KEY, JSON.stringify({ ...handoff, at: Date.now() }));
+        } catch (error) {
+            console.error('[TransPoster]', 'לא הצלחתי להעביר את הנתונים לבנאי', error);
+
+            return;
+        }
+
+        window.open(BUILDER_PAGE[handoff.part], '_blank');
+    }
+
+    function editButton(handoff) {
+        const button = create('button', 'btn btn-sm btn-outline-dark', TEXT.edit);
+        button.type = 'button';
+        button.title = TEXT.editTitle;
+        button.addEventListener('click', () => openBuilder(handoff()));
+
+        return button;
+    }
+
     /**
      * The language panels a part is produced with, given the Hebrew one and the secondary one
      * or null. A part whose secondary language has no text of its own prints Hebrew alone:
@@ -729,7 +784,15 @@
                 return produceHead(sides, `ראש-תחנה-${stop.code}.pdf`);
             }));
 
-            cell.appendChild(button);
+            // The head can be changed even when the page gave up no code - the builder has a
+            // field for it, and typing it there is the point
+            cell.append(button, editButton(() => ({
+                part: 'header',
+                secondaryLang: state.secondaryName ? secondaryLang : null,
+                stopName: { he: stop.name, secondary: state.secondaryName },
+                stopCode: stop.code ?? '',
+                platform,
+            })));
         });
     }
 
@@ -783,7 +846,14 @@
                 }
             }));
 
-            cell.append(button, note);
+            cell.append(button, editButton(() => ({
+                part: 'row',
+                secondaryLang: strip.secondary.dest ? secondaryLang : null,
+                destMode: strip.mode,
+                dest: { he: strip.raw.hebrew.dest, secondary: strip.raw.secondary.dest },
+                subDest: { he: strip.raw.hebrew.subDest, secondary: strip.raw.secondary.subDest },
+                routes: strip.routes,
+            })), note);
         });
     }
 

@@ -4,14 +4,30 @@
     {
       "file": "stop-details-flag.js",
       "title": "תמרור 505 — דגל תחנה, עם הפקת ראש תחנה ומדבקות שורה",
-      "requires": ["flag-keywords.js"],
-      "match": ["/Stops/Details/\\d+"]
+      "requires": [
+        "flag-keywords.js"
+      ],
+      "match": [
+        "/Stops/Details/\\d+"
+      ]
     },
     {
       "file": "flag-builder-translation.js",
       "title": "בנאי דגל — חיפוש תרגום ב-GTFS לשדות השפה השנייה",
-      "requires": ["flag-keywords.js", "gtfs-translations.js"],
-      "match": ["/FlagBuilder/(Header|Row)(/|\\?|$)"]
+      "requires": [
+        "flag-keywords.js",
+        "gtfs-translations.js"
+      ],
+      "match": [
+        "/FlagBuilder/(Header|Row)(/|\\?|$)"
+      ]
+    },
+    {
+      "file": "flag-builder-fill.js",
+      "title": "בנאי דגל — מילוי מתיק התחנה, מלחצן \"שנה והפק\"",
+      "match": [
+        "/FlagBuilder/(Header|Row)(/|\\?|$)"
+      ]
     }
   ]
 }
