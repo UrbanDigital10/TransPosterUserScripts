@@ -172,6 +172,19 @@
 
     const alertBox = (kind, text) => create('div', `alert alert-${kind} py-2`, text);
 
+    /**
+     * A field of a JSON response by name, whichever case the endpoint spelled it in. The stop
+     * page's own endpoints disagree: /Stops/Routes goes through JsonDefaultContract, which
+     * pins PropertyNamingPolicy to null and keeps PascalCase, while /Stops/Translation uses
+     * the controller's plain Json() and comes back camelCase. Reading by one spelling yields
+     * undefined against the other - silently, which is how the stop head lost its translation.
+     */
+    function field(source, name) {
+        const key = Object.keys(source ?? {}).find(k => k.toLowerCase() === name.toLowerCase());
+
+        return key === undefined ? undefined : source[key];
+    }
+
     async function getJson(url) {
         const response = await fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
 
@@ -506,7 +519,7 @@
             stop,
             secondaryLang,
             routes,
-            secondaryName: (secondaryLang === 'ar' ? translation.ArabicName : translation.EnglishName) ?? '',
+            secondaryName: field(translation, secondaryLang === 'ar' ? 'ArabicName' : 'EnglishName') ?? '',
 
             // A string is one platform, '' being the lines that belong to no platform of their
             // own. null means nothing has been chosen yet: the first render settles it, either
