@@ -447,6 +447,15 @@
     }
 
     /** The head is one row tall by definition, so it is produced once or not at all. */
+    /**
+     * The language panels a part is produced with, given the Hebrew one and the secondary one
+     * or null. A part whose secondary language has no text of its own prints Hebrew alone:
+     * putting the Hebrew text on the second panel makes the producer set it in the secondary
+     * language's direction, which turns the Hebrew round, and an empty panel prints a blank
+     * half. One panel is what the builder itself produces in single-language mode.
+     */
+    const panelsFor = (hebrew, secondary) => (secondary === null ? [hebrew] : [hebrew, secondary]);
+
     async function produceHead(payload, fileName) {
         const result = await attemptProduce('header', payload);
 
@@ -699,13 +708,9 @@
             button.addEventListener('click', () => run(button, problems, () => {
                 const panel = (lang, stopName) => ({ lang, stopName, stopCode: stop.code, platform });
 
-                // A stop with no translation prints Hebrew alone. Putting the Hebrew name on
-                // the second panel would set it in the secondary language's direction, which
-                // turns the Hebrew round, and an empty panel would print a blank half. One
-                // language is what the builder itself produces in single-language mode.
-                const sides = state.secondaryName
-                    ? [panel('he', stop.name), panel(secondaryLang, state.secondaryName)]
-                    : [panel('he', stop.name)];
+                const sides = panelsFor(
+                    panel('he', stop.name),
+                    state.secondaryName ? panel(secondaryLang, state.secondaryName) : null);
 
                 return produceHead(sides, `ראש-תחנה-${stop.code}.pdf`);
             }));
@@ -733,22 +738,20 @@
             const note = create('div', 'tp505-note');
 
             button.addEventListener('click', () => run(button, problems, async () => {
-                const sides = [
-                    {
-                        lang: 'he',
-                        destType: 'reg',
-                        dest: strip.hebrew.dest ?? '',
-                        subDest: strip.hebrew.subDest ?? '',
-                        routes: strip.routes,
-                    },
-                    {
-                        lang: secondaryLang,
-                        destType: 'reg',
-                        dest: strip.secondary.dest ?? '',
-                        subDest: strip.secondary.subDest ?? '',
-                        routes: strip.routes,
-                    },
-                ];
+                const panel = (lang, text) => ({
+                    lang,
+                    destType: 'reg',
+                    dest: text.dest ?? '',
+                    subDest: text.subDest ?? '',
+                    routes: strip.routes,
+                });
+
+                // The destination is what decides, not the sub-destination: the captions carry
+                // their own translations, so a seasonal line with an untranslated destination
+                // would otherwise print a second panel saying "Seasonal" over nothing.
+                const sides = panelsFor(
+                    panel('he', strip.hebrew),
+                    strip.secondary.dest ? panel(secondaryLang, strip.secondary) : null);
 
                 try {
                     const rowSpan = await produceStrip(
