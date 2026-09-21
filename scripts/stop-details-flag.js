@@ -696,12 +696,19 @@
             button.type = 'button';
             button.disabled = !stop.code;
 
-            button.addEventListener('click', () => run(button, problems, () => produceHead(
-                [
-                    { lang: 'he', stopName: stop.name, stopCode: stop.code, platform },
-                    { lang: secondaryLang, stopName: state.secondaryName || stop.name, stopCode: stop.code, platform },
-                ],
-                `ראש-תחנה-${stop.code}.pdf`)));
+            button.addEventListener('click', () => run(button, problems, () => {
+                const panel = (lang, stopName) => ({ lang, stopName, stopCode: stop.code, platform });
+
+                // A stop with no translation prints Hebrew alone. Putting the Hebrew name on
+                // the second panel would set it in the secondary language's direction, which
+                // turns the Hebrew round, and an empty panel would print a blank half. One
+                // language is what the builder itself produces in single-language mode.
+                const sides = state.secondaryName
+                    ? [panel('he', stop.name), panel(secondaryLang, state.secondaryName)]
+                    : [panel('he', stop.name)];
+
+                return produceHead(sides, `ראש-תחנה-${stop.code}.pdf`);
+            }));
 
             cell.appendChild(button);
         });
