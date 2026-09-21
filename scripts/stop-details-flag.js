@@ -137,7 +137,17 @@
 
         #${PANE_ID} .tp505-dest { font-weight: 600; }
         #${PANE_ID} .tp505-subdest { font-size: .8rem; font-weight: 400; }
-        #${PANE_ID} .tp505-missing { font-size: .8rem; font-weight: 400; opacity: .55; }
+        #${PANE_ID} .tp505-missing { font-size: .8rem; font-weight: 400; opacity: .7; }
+
+        /* A cell with nothing to print in its language, in the application's own warning wash
+           (color.css). It is laid on as a background IMAGE so that it tints whatever the cell
+           already is - white on the head, yellow on a strip - instead of replacing it.
+           The border carries the mark rather than the wash: over the strip's yellow the wash
+           alone only deepens it, and reads as another shade of strip rather than as a flag. */
+        #${PANE_ID} .tp505-cell.tp505-untranslated {
+            background-image: linear-gradient(var(--app-warning, #ff5b5b33), var(--app-warning, #ff5b5b33));
+            box-shadow: inset 0 0 0 2px var(--app-red, #ff6060);
+        }
 
         /* The control column is white like the symbol column of a real flag, so it reads as
            part of the board rather than as a table glued to its side. */
@@ -651,6 +661,10 @@
         return appendCell(flag, className, cell => {
             cell.lang = lang;
             cell.dir = lang === 'en' ? 'ltr' : 'rtl';
+
+            // Marked rather than reworded: the cell still says what is missing, and the wash
+            // is what catches the eye when scanning a flag for the gaps
+            cell.classList.toggle('tp505-untranslated', !dest);
 
             cell.appendChild(dest
                 ? create('span', 'tp505-dest', dest)
