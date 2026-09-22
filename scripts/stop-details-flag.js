@@ -47,6 +47,13 @@
         translation: name => `/Stops/Translation?stopName=${encodeURIComponent(name)}`,
         produce: '/flag-builder/produce',
         busIcon: '/areas/flag-builder/images/stop-head-bus.svg',
+
+        // The GTFS explorer's table endpoint, the one generic reader the application offers
+        // over GTFS. Any signed-in user may ask it; the flag builder's own pages may not.
+        agencies: '/GtfsExplorer/Agencies/TableDate',
+
+        // Named by the operator's number, the way the builder and the audit card name it
+        operatorIcon: id => `/OperatorIcons/${id}.jpg`,
     };
 
     // Mirrors LineAppColors. The exclusivity colour is what tells a line apart - plus, for this
@@ -100,7 +107,7 @@
            black frame it is on the printed flag. */
         #${PANE_ID} .tp505-flag {
             display: grid;
-            grid-template-columns: 7rem minmax(10ch, 1fr) minmax(10ch, 1fr) max-content;
+            grid-template-columns: 6rem 7rem minmax(10ch, 1fr) minmax(10ch, 1fr) max-content;
             gap: 2px;
             padding: 2px;
             background: #000;
@@ -136,6 +143,24 @@
             text-align: center;
             line-height: 1.25;
         }
+
+        /* The symbol square of the printed strip: white behind the operator's logo, exactly as
+           the flag prints it and as the audit card shows it. */
+        #${PANE_ID} .tp505-cell.tp505-operator {
+            background: #fff;
+            align-items: center;
+            text-align: center;
+            gap: .2rem;
+            padding: .3rem;
+        }
+
+        #${PANE_ID} .tp505-operator img {
+            max-inline-size: 100%;
+            max-block-size: 2.4rem;
+            object-fit: contain;
+        }
+
+        #${PANE_ID} .tp505-operator-name { font-size: .7rem; line-height: 1.2; }
 
         #${PANE_ID} .tp505-dest { font-weight: 600; }
         #${PANE_ID} .tp505-subdest { font-size: .8rem; font-weight: 400; }
@@ -195,6 +220,61 @@
         const key = Object.keys(source ?? {}).find(k => k.toLowerCase() === name.toLowerCase());
 
         return key === undefined ? undefined : source[key];
+    }
+
+    const normalizeName = name => (name ?? '').trim().toLowerCase();
+
+    /**
+     * The operators' numbers, keyed by the name a route names them with. The routes endpoint
+     * gives a line's operator as a name only, and an icon file is named by the number - so the
+     * numbers are read once from the GTFS explorer's table endpoint, asked the way its own grid
+     * asks it: form encoded, with DataTables' bracket parameter names, which is the wire format
+     * its [FromForm] binder was built for.
+     *
+     * Read once per page. The table is a few dozen rows and does not change under us, and a
+     * failure leaves an empty map - every strip then shows its operator's name without an icon.
+     */
+    let agencyIdsPromise = null;
+
+    const agencyIds = () => (agencyIdsPromise ??= loadAgencyIds().catch(error => {
+        console.warn('[TransPoster]', 'רשימת המפעילים לא נטענה, האייקונים לא יוצגו', error);
+
+        return new Map();
+    }));
+
+    async function loadAgencyIds() {
+        const params = new URLSearchParams();
+
+        params.set('draw', '1');
+        params.set('start', '0');
+        params.set('length', '500');
+
+        ['Id', 'Name'].forEach((name, index) => {
+            params.set(`columns[${index}][data]`, name);
+            params.set(`columns[${index}][name]`, name);
+            params.set(`columns[${index}][searchable]`, 'true');
+            params.set(`columns[${index}][orderable]`, 'true');
+            params.set(`columns[${index}][search][value]`, '');
+            params.set(`columns[${index}][search][regex]`, 'false');
+        });
+
+        params.set('order[0][column]', '0');
+        params.set('order[0][dir]', 'asc');
+
+        const response = await fetch(URLS.agencies, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+            body: params.toString(),
+        });
+
+        if (!response.ok) {
+            throw new Error(String(response.status));
+        }
+
+        const rows = field(await response.json(), 'data') ?? [];
+
+        return new Map(rows.map(row => [normalizeName(field(row, 'Name')), field(row, 'Id')]));
     }
 
     async function getJson(url) {
@@ -363,9 +443,11 @@
             const hebrew = resolveDest('he', mode, raw.hebrew);
             const secondary = resolveDest(secondaryLang, mode, raw.secondary);
 
-            // Grouped on what the Hebrew panel shows, the way the audit card groups its strips:
-            // what the reader sees is the only thing that tells rows apart.
-            const key = `${bucketOf(mode)}|${hebrew.dest}|${hebrew.subDest}`;
+            // Grouped on what the strip shows, the way the audit card groups its strips
+            // (WorkAuditRules.GroupStrips): the Hebrew panel's text AND the symbol square, which
+            // for an ordinary line is its operator's logo. Two operators to one destination are
+            // two strips on the flag, because each carries its own logo.
+            const key = `${bucketOf(mode)}|${hebrew.dest}|${hebrew.subDest}|${route.AgencyName ?? ''}`;
 
             let strip = strips.get(key);
 
@@ -376,7 +458,7 @@
                 // destination underneath. On a captioned strip the lines grouped together can
                 // have had different destinations, and the first one stands for them - it is a
                 // starting point for someone about to edit it, not a statement about the group.
-                strip = { bucket: bucketOf(mode), mode, hebrew, secondary, raw, routes: [] };
+                strip = { bucket: bucketOf(mode), mode, agency: route.AgencyName, hebrew, secondary, raw, routes: [] };
                 strips.set(key, strip);
             }
 
@@ -712,6 +794,36 @@
         return cell;
     }
 
+    /**
+     * The operator, named at once and pictured when the icons arrive - the name is what the
+     * reader needs, and waiting on a lookup to show it would hold the whole flag back. An
+     * operator with no icon file, or a lookup that failed, simply reads as its name.
+     */
+    function appendOperatorCell(flag, agency) {
+        return appendCell(flag, 'tp505-operator', cell => {
+            if (!agency) {
+                return;
+            }
+
+            cell.appendChild(create('span', 'tp505-operator-name', agency));
+
+            agencyIds().then(ids => {
+                const id = ids.get(normalizeName(agency));
+
+                if (id === undefined || !cell.isConnected) {
+                    return;
+                }
+
+                const image = create('img');
+                image.src = URLS.operatorIcon(id);
+                image.alt = '';
+                image.addEventListener('error', () => image.remove(), { once: true });
+
+                cell.prepend(image);
+            });
+        });
+    }
+
     function appendTextCell(flag, className, lang, dest, subDest) {
         return appendCell(flag, className, cell => {
             cell.lang = lang;
@@ -749,6 +861,9 @@
 
         // The head is printed for the selected platform; the whole station prints no platform
         const platform = state.platform ?? '';
+
+        // The head carries no symbol square of its own; the cell holds the column open
+        appendCell(flag, 'tp505-operator tp505-head');
 
         appendCell(flag, 'tp505-num tp505-icon tp505-head', cell => {
             const image = create('img');
@@ -798,6 +913,8 @@
 
     function appendStripRow(flag, state, strip, problems) {
         const { secondaryLang } = state;
+
+        appendOperatorCell(flag, strip.agency);
 
         appendCell(flag, 'tp505-num', cell => {
             for (const routeNum of strip.routes) {
