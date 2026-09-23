@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TransPoster – סקריפטים
 // @namespace    transposter.urban-digital.co.il
-// @version      1.1.0
+// @version      1.2.0
 // @description  טוען את סקריפטי ההרחבה של TransPoster לפי הדף שפתוח. מתקינים אותו פעם אחת — כל השאר מגיע ומתעדכן מעצמו.
 // @author       Urban Digital
 // @match        https://transposter.urban-digital.co.il/*
@@ -35,6 +35,9 @@
 
     const CACHE_PREFIX = 'transposter-userscripts:';
     const LOG = '[TransPoster]';
+
+    // The tag TransPoster's layout puts in the head of every page a signed-in user sees
+    const ORG_META = 'org-name';
 
     /**
      * GitHub serves raw files with a five minute cache. `no-cache` asks the browser to
@@ -114,6 +117,70 @@
     }
 
     /**
+     * Whitespace is the only difference forgiven, on both sides: a name stored with a
+     * trailing space, or with two spaces between its words, is the same organization. NFC
+     * because the same Hebrew name can be stored composed or decomposed, and the two are
+     * different strings until they are not.
+     *
+     * Nothing beyond that is forgiven - no partial match, no pattern. "נובה גו תחבורה" is
+     * not "נובה גו".
+     */
+    function canonical(name) {
+        return name.normalize('NFC').trim().replace(/\s+/g, ' ');
+    }
+
+    /**
+     * The organization of the user reading this page, as the application wrote it into the
+     * head. Read through the DOM rather than out of the page source: Razor HTML-encodes the
+     * value and `content` hands it back decoded, and Israeli company names contain quotation
+     * marks.
+     *
+     * No tag at all means no organization to go on - the user is signed out, or belongs to
+     * none. The application only writes the tag when both are true.
+     */
+    function organizationHere() {
+        const meta = document.querySelector(`meta[name="${ORG_META}"]`);
+
+        return meta === null ? null : canonical(meta.content);
+    }
+
+    /**
+     * Whether the modules may run for this user at all.
+     *
+     * The list lives in the manifest rather than in this file so that taking on a customer,
+     * or dropping one, reaches everybody on their next page load - rather than waiting for
+     * each user's script manager to notice a new version of the loader, which is usually once
+     * a day.
+     *
+     * Closed unless the answer is plainly yes: no tag, or a name that is not on the list, and
+     * nothing runs. That has a real cost - if this ever reaches users before the tag reaches
+     * production, every script stops for every customer at once - but a gate that opens when
+     * it cannot tell is not a gate.
+     *
+     * It is also fragile by construction, and knowingly so. The name is the organization's
+     * own and an administrator can edit it from the admin screens, so a rename locks a paying
+     * customer out silently until the list here is corrected. The value is fixed at sign-in on
+     * top of that, so even the correction only reaches the user once they sign in again.
+     */
+    function permitted(manifest) {
+        const organization = organizationHere();
+
+        if (organization === null) {
+            console.log(LOG, 'אין ארגון בדף — הסקריפטים לא ירוצו');
+
+            return false;
+        }
+
+        if (!(manifest.organizations ?? []).map(canonical).includes(organization)) {
+            console.log(LOG, `הארגון "${organization}" אינו ברשימת המורשים — הסקריפטים לא ירוצו`);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Whether a manifest entry wants this page. The patterns are regular expressions tested
      * against the whole address, so one entry can cover a page, a section or the whole site.
      */
@@ -137,6 +204,13 @@
         } catch (error) {
             console.error(LOG, 'לא הצלחתי לקרוא את רשימת הסקריפטים', error);
 
+            return;
+        }
+
+        // After the manifest, because that is where the list of organizations comes from, and
+        // before any module is fetched, so a user who is not entitled to them never asks
+        // GitHub for one.
+        if (!permitted(manifest)) {
             return;
         }
 
