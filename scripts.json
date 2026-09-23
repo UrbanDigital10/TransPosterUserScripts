@@ -13,6 +13,17 @@
       ]
     },
     {
+      "file": "event-details-strip.js",
+      "title": "פרטי אירוע — הפקת סטריפ מפעולה שיש בה קווים ויעד",
+      "requires": [
+        "flag-produce.js",
+        "gtfs-translations.js"
+      ],
+      "match": [
+        "/Maintenance/Events/Details/\\d+"
+      ]
+    },
+    {
       "file": "flag-builder-translation.js",
       "title": "בנאי דגל — חיפוש תרגום ב-GTFS לשדות השפה השנייה",
       "requires": [
