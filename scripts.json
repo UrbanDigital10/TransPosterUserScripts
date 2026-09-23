@@ -5,6 +5,7 @@
       "file": "stop-details-flag.js",
       "title": "תמרור 505 — דגל תחנה, עם הפקת ראש תחנה ומדבקות שורה",
       "requires": [
+        "buttons.js",
         "flag-keywords.js",
         "flag-produce.js"
       ],
@@ -16,6 +17,7 @@
       "file": "event-details-strip.js",
       "title": "פרטי אירוע — הפקת סטריפ מפעולה שיש בה קווים ויעד",
       "requires": [
+        "buttons.js",
         "flag-produce.js",
         "gtfs-translations.js"
       ],
@@ -27,6 +29,7 @@
       "file": "flag-builder-translation.js",
       "title": "בנאי דגל — חיפוש תרגום ב-GTFS לשדות השפה השנייה",
       "requires": [
+        "buttons.js",
         "flag-keywords.js",
         "gtfs-translations.js"
       ],

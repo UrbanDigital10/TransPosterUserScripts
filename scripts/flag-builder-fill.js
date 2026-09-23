@@ -38,7 +38,8 @@
     // followed, and must not fill a form someone opened later for their own reasons.
     const HANDOFF_SECONDS = 60;
 
-    const NOTE_ID = 'tpf-filled-note';
+    const NOTE_ID = 'tp-fill-note';
+    const STYLE_ID = 'tp-fill-styles';
 
     const TEXT = {
         filled: 'מולא מתוך תיק התחנה. שינויים כאן אינם נשמרים לתחנה.',
@@ -172,6 +173,7 @@
         }
 
         const style = document.createElement('style');
+        style.id = STYLE_ID;
         style.textContent = CSS;
         document.head.appendChild(style);
 

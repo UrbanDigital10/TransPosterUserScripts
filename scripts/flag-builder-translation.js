@@ -38,13 +38,13 @@
 
     const LOG = '[TransPoster]';
 
-    const ROOT_CLASS = 'tpx-translate';
-    const BUTTON_CLASS = 'tpx-translate-btn';
-    const NOTE_CLASS = 'tpx-translate-note';
+    const ROOT_CLASS = 'tp-translate';
+    const BUTTON_CLASS = 'tp-translate-btn';
+    const NOTE_CLASS = 'tp-translate-note';
 
     // The application's own class for a message that reports a failure beside a field
     const NOTE_ALERT_CLASS = 'validation-alert';
-    const STYLE_ID = 'tpx-translate-style';
+    const STYLE_ID = 'tp-translate-styles';
 
     const TEXT = {
         button: 'חפש תרגום',
@@ -90,7 +90,7 @@
            :not() keeps this rule out of that one's way - the two have the same weight, and
            this style element is appended after the application's own. */
         .${NOTE_CLASS}:not(.${NOTE_ALERT_CLASS}) {
-            color: var(--app-gray);
+            color: var(--app-gray, #999999);
         }
     `;
 
@@ -156,20 +156,6 @@
 
     // ------------------------------------------------------------------ the button
 
-    function create(tag, className, text) {
-        const node = document.createElement(tag);
-
-        if (className) {
-            node.className = className;
-        }
-
-        if (text != null) {
-            node.textContent = text;
-        }
-
-        return node;
-    }
-
     function say(note, sentences, isBad) {
         note.textContent = sentences.filter(Boolean).join(' ');
         note.classList.toggle(NOTE_ALERT_CLASS, isBad === true);
@@ -194,42 +180,38 @@
 
         const lang = secondLang();
 
-        button.disabled = true;
-        button.textContent = TEXT.working;
         say(note, [], false);
 
         try {
-            const filled = [];
-            const missing = [];
+            await tpWhileBusy(button, TEXT.working, async () => {
+                const filled = [];
+                const missing = [];
 
-            for (const pair of wanted) {
-                const value = await tpFindTranslation(pair.source.value, lang);
+                for (const pair of wanted) {
+                    const value = await tpFindTranslation(pair.source.value, lang);
 
-                if (value) {
-                    pair.target.value = value;
-                    filled.push(pair);
+                    if (value) {
+                        pair.target.value = value;
+                        filled.push(pair);
+                    }
+                    else {
+                        missing.push(pair.label);
+                    }
                 }
-                else {
-                    missing.push(pair.label);
-                }
-            }
 
-            // The builder rebuilds its preview on `change`, and a value set from a script
-            // raises none - so it is raised here, once every field has been filled
-            filled.forEach(pair =>
-                pair.target.dispatchEvent(new Event('change', { bubbles: true }))
-            );
+                // The builder rebuilds its preview on `change`, and a value set from a script
+                // raises none - so it is raised here, once every field has been filled
+                filled.forEach(pair =>
+                    pair.target.dispatchEvent(new Event('change', { bubbles: true }))
+                );
 
-            const result = missing.length ? TEXT.missing(missing) : TEXT.done;
-            say(note, [result, ...skipped], missing.length > 0);
+                const result = missing.length ? TEXT.missing(missing) : TEXT.done;
+                say(note, [result, ...skipped], missing.length > 0);
+            });
         }
         catch (error) {
             console.error(LOG, 'שליפת תרגום נכשלה', error);
             say(note, [TEXT.failed], true);
-        }
-        finally {
-            button.disabled = false;
-            button.textContent = TEXT.button;
         }
     }
 
@@ -255,14 +237,11 @@
             return;
         }
 
-        const style = create('style');
-        style.id = STYLE_ID;
-        style.textContent = CSS;
-        document.head.appendChild(style);
+        tpInjectStyle(STYLE_ID, CSS);
 
-        const root = create('div', ROOT_CLASS);
-        const button = create('button', `btn-link ${BUTTON_CLASS}`, TEXT.button);
-        const note = create('div', NOTE_CLASS);
+        const root = tpCreate('div', ROOT_CLASS);
+        const button = tpCreate('button', `btn-link ${BUTTON_CLASS}`, TEXT.button);
+        const note = tpCreate('div', NOTE_CLASS);
 
         button.type = 'button';
         button.addEventListener('click', () => fillTranslations(page, button, note));

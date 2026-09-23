@@ -31,6 +31,7 @@
 
     const PANE_ID = 'tp505-pane';
     const TAB_ID = 'tp505-tab';
+    const STYLE_ID = 'tp505-styles';
 
     const URLS = {
         routes: id => `/Stops/Routes/${id}`,
@@ -179,29 +180,15 @@
             padding: .3rem;
         }
 
-        #${PANE_ID} .tp505-act .btn { white-space: nowrap; }
+        #${PANE_ID} .tp505-act .tp-btn { inline-size: 100%; }
         #${PANE_ID} .tp505-note { font-size: .75rem; text-align: center; opacity: .7; }
     `;
 
     // ------------------------------------------------------------------ small helpers
 
-    function create(tag, className, text) {
-        const node = document.createElement(tag);
-
-        if (className) {
-            node.className = className;
-        }
-
-        if (text != null) {
-            node.textContent = text;
-        }
-
-        return node;
-    }
-
     const distinct = values => [...new Set(values)];
 
-    const alertBox = (kind, text) => create('div', `alert alert-${kind} py-2`, text);
+    const alertBox = (kind, text) => tpCreate('div', `alert alert-${kind} py-2`, text);
 
     /**
      * A field of a JSON response by name, whichever case the endpoint spelled it in. The stop
@@ -520,9 +507,7 @@
     }
 
     function editButton(handoff) {
-        const button = create('button', 'btn btn-sm btn-outline-dark', TEXT.edit);
-        button.type = 'button';
-        button.title = TEXT.editTitle;
+        const button = tpEditButton(TEXT.edit, TEXT.editTitle);
         button.addEventListener('click', () => openBuilder(handoff()));
 
         return button;
@@ -547,21 +532,21 @@
             return;
         }
 
-        document.head.appendChild(Object.assign(create('style'), { textContent: CSS }));
+        tpInjectStyle(STYLE_ID, CSS);
 
-        const button = create('button', 'nav-link', TEXT.tabTitle);
+        const button = tpCreate('button', 'nav-link', TEXT.tabTitle);
         button.id = TAB_ID;
         button.type = 'button';
         button.setAttribute('role', 'tab');
         button.dataset.bsToggle = 'tab';
         button.dataset.bsTarget = `#${PANE_ID}`;
 
-        const item = create('li', 'nav-item');
+        const item = tpCreate('li', 'nav-item');
         item.setAttribute('role', 'presentation');
         item.appendChild(button);
         routesTab.closest('ul.nav-tabs').appendChild(item);
 
-        const pane = create('div', 'tab-pane fade');
+        const pane = tpCreate('div', 'tab-pane fade');
         pane.id = PANE_ID;
         pane.setAttribute('role', 'tabpanel');
         pane.setAttribute('aria-labelledby', TAB_ID);
@@ -646,7 +631,7 @@
 
         // Whatever a click has to say - a failed production, a strip that would not fit - is
         // said here, above the flag, and cleared when the next click starts
-        const problems = create('div');
+        const problems = tpCreate('div');
         pane.appendChild(problems);
 
         if (routes.length === 0) {
@@ -655,8 +640,8 @@
             return;
         }
 
-        const scroll = create('div', 'tp505-scroll');
-        const flag = create('div', 'tp505-flag');
+        const scroll = tpCreate('div', 'tp505-scroll');
+        const flag = tpCreate('div', 'tp505-flag');
         scroll.appendChild(flag);
         pane.appendChild(scroll);
 
@@ -668,9 +653,9 @@
     }
 
     function platformBar(state, platforms) {
-        const bar = create('div', 'tp505-bar');
+        const bar = tpCreate('div', 'tp505-bar');
 
-        const select = create('select', 'form-select form-select-sm w-auto');
+        const select = tpCreate('select', 'form-select form-select-sm w-auto');
         select.id = 'tp505-platform';
 
         // The option's value is its index into this list, so a platform can be named anything
@@ -687,7 +672,7 @@
         }
 
         choices.forEach((choice, index) => {
-            const option = create('option', null, choice.text);
+            const option = tpCreate('option', null, choice.text);
             option.value = String(index);
             select.appendChild(option);
         });
@@ -699,7 +684,7 @@
             render(state);
         });
 
-        const label = create('label', null, TEXT.platformLabel);
+        const label = tpCreate('label', null, TEXT.platformLabel);
         label.htmlFor = select.id;
 
         bar.append(label, select);
@@ -710,7 +695,7 @@
     // ------------------------------------------------------------------ rows
 
     function appendCell(flag, className, build) {
-        const cell = create('div', `tp505-cell ${className}`);
+        const cell = tpCreate('div', `tp505-cell ${className}`);
         build?.(cell);
         flag.appendChild(cell);
 
@@ -719,7 +704,7 @@
 
     /** An icon that goes quietly when its file is not there, leaving the label to speak. */
     function prependIcon(cell, src) {
-        const image = create('img');
+        const image = tpCreate('img');
         image.src = src;
         image.alt = '';
         image.addEventListener('error', () => image.remove(), { once: true });
@@ -741,7 +726,7 @@
                 return;
             }
 
-            cell.appendChild(create('span', 'tp505-operator-name', square.label));
+            cell.appendChild(tpCreate('span', 'tp505-operator-name', square.label));
 
             if (square.icon) {
                 prependIcon(cell, square.icon);
@@ -769,11 +754,11 @@
             cell.classList.toggle('tp505-untranslated', !dest);
 
             cell.appendChild(dest
-                ? create('span', 'tp505-dest', dest)
-                : create('span', 'tp505-missing', TEXT.missingTranslation));
+                ? tpCreate('span', 'tp505-dest', dest)
+                : tpCreate('span', 'tp505-missing', TEXT.missingTranslation));
 
             if (subDest) {
-                cell.appendChild(create('span', 'tp505-subdest', subDest));
+                cell.appendChild(tpCreate('span', 'tp505-subdest', subDest));
             }
         });
     }
@@ -801,7 +786,7 @@
         appendCell(flag, 'tp505-operator tp505-head');
 
         appendCell(flag, 'tp505-num tp505-icon tp505-head', cell => {
-            const image = create('img');
+            const image = tpCreate('img');
             image.src = URLS.busIcon;
             image.alt = '';
 
@@ -820,8 +805,7 @@
             headSubtitle(secondaryLang, stop, platform));
 
         appendCell(flag, 'tp505-act tp505-head', cell => {
-            const button = create('button', 'btn btn-sm btn-dark', TEXT.produceHead);
-            button.type = 'button';
+            const button = tpProduceButton(TEXT.produceHead);
             button.disabled = !stop.code;
 
             button.addEventListener('click', () => run(button, problems, () => {
@@ -853,7 +837,7 @@
 
         appendCell(flag, 'tp505-num', cell => {
             for (const routeNum of strip.routes) {
-                cell.appendChild(create('span', null, routeNum));
+                cell.appendChild(tpCreate('span', null, routeNum));
             }
         });
 
@@ -861,10 +845,9 @@
         appendTextCell(flag, 'tp505-text', secondaryLang, strip.secondary.dest, strip.secondary.subDest);
 
         appendCell(flag, 'tp505-act', cell => {
-            const button = create('button', 'btn btn-sm btn-dark', TEXT.produceRow);
-            button.type = 'button';
+            const button = tpProduceButton(TEXT.produceRow);
 
-            const note = create('div', 'tp505-note');
+            const note = tpCreate('div', 'tp505-note');
 
             button.addEventListener('click', () => run(button, problems, async () => {
                 const panel = (lang, text) => ({
@@ -911,19 +894,12 @@
 
     /** One button, one job at a time, and whatever went wrong said out loud. */
     async function run(button, problems, job) {
-        const label = button.textContent;
-
         problems.textContent = '';
-        button.disabled = true;
-        button.textContent = TEXT.producing;
 
         try {
-            await job();
+            await tpWhileBusy(button, TEXT.producing, job);
         } catch (error) {
             problems.appendChild(alertBox('danger', `${TEXT.produceFailed}: ${error.message}`));
-        } finally {
-            button.disabled = false;
-            button.textContent = label;
         }
     }
 

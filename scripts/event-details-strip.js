@@ -38,6 +38,8 @@
     const WORKS_TABLE = '#works-table';
 
     const CELL_CLASS = 'tpstrip-cell';
+    const BUTTON_CLASS = 'tpstrip-btn';
+    const STYLE_ID = 'tpstrip-styles';
 
     const TEXT = {
         produce: 'הפק סטריפ',
@@ -81,20 +83,6 @@
 
     // ------------------------------------------------------------------ small helpers
 
-    function create(tag, className, text) {
-        const node = document.createElement(tag);
-
-        if (className) {
-            node.className = className;
-        }
-
-        if (text != null) {
-            node.textContent = text;
-        }
-
-        return node;
-    }
-
     /**
      * A field of a JSON response by name, whichever case the endpoint spelled it in. The
      * application's endpoints disagree: this.JsonDefaultContract(...) keeps PascalCase while a
@@ -109,15 +97,6 @@
 
     /** The parts of a comma-separated field, empties dropped. */
     const parts = value => (value ?? '').split(',').map(part => part.trim()).filter(Boolean);
-
-    function injectStyles() {
-        if (!document.getElementById('tpstrip-styles')) {
-            const style = create('style');
-            style.id = 'tpstrip-styles';
-            style.textContent = CSS;
-            document.head.appendChild(style);
-        }
-    }
 
     // ------------------------------------------------------------------ reading the page
 
@@ -279,7 +258,7 @@
         const headRow = table.tHead?.rows[0];
 
         if (headRow && !headRow.querySelector(`.${CELL_CLASS}`)) {
-            headRow.appendChild(create('th', CELL_CLASS));
+            headRow.appendChild(tpCreate('th', CELL_CLASS));
         }
     }
 
@@ -287,7 +266,7 @@
         let cell = row.querySelector(`.${CELL_CLASS}`);
 
         if (!cell) {
-            cell = create('td', CELL_CLASS);
+            cell = tpCreate('td', CELL_CLASS);
             row.appendChild(cell);
         }
 
@@ -317,14 +296,14 @@
             return;
         }
 
-        if (cell.querySelector('.tpstrip-btn')) {
+        if (cell.querySelector(`.${BUTTON_CLASS}`)) {
             return;
         }
 
-        const note = create('div', 'tpstrip-note');
+        const note = tpCreate('div', 'tpstrip-note');
 
-        const button = create('button', 'btn btn-sm btn-dark tpstrip-btn', TEXT.produce);
-        button.type = 'button';
+        const button = tpProduceButton(TEXT.produce);
+        button.classList.add(BUTTON_CLASS);
 
         button.addEventListener('click', () => run(button, note, row));
 
@@ -333,29 +312,24 @@
 
     /** One button, one job at a time, and whatever went wrong said out loud on the row itself. */
     async function run(button, note, row) {
-        const label = button.textContent;
-
-        button.disabled = true;
-        button.textContent = TEXT.producing;
         note.className = 'tpstrip-note';
         note.textContent = '';
 
         try {
-            const stop = selectedStop();
+            await tpWhileBusy(button, TEXT.producing, async () => {
+                const stop = selectedStop();
 
-            if (!stop?.id) {
-                throw new Error(TEXT.noStop);
-            }
+                if (!stop?.id) {
+                    throw new Error(TEXT.noStop);
+                }
 
-            // Read again on click rather than when the button was made: the fields are edited
-            // in place, and what is on screen now is what should be printed
-            note.textContent = await produceFor(stripOf(row), stop, span => (note.textContent = TEXT.trying(span)));
+                // Read again on click rather than when the button was made: the fields are
+                // edited in place, and what is on screen now is what should be printed
+                note.textContent = await produceFor(stripOf(row), stop, span => (note.textContent = TEXT.trying(span)));
+            });
         } catch (error) {
             note.className = 'tpstrip-note tpstrip-bad';
             note.textContent = TEXT.failed(error.message);
-        } finally {
-            button.disabled = false;
-            button.textContent = label;
         }
     }
 
@@ -376,7 +350,7 @@
     // ------------------------------------------------------------------ entry
 
     function mount() {
-        injectStyles();
+        tpInjectStyle(STYLE_ID, CSS);
 
         // Delegated, because the actions table is built by the page's own script for the work
         // that is selected - which may be long after this runs, and again on every selection
