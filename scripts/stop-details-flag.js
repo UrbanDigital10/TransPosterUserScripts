@@ -54,6 +54,9 @@
 
         // Named by the operator's number, the way the builder and the audit card name it
         operatorIcon: id => `/OperatorIcons/${id}.jpg`,
+
+        // A special symbol is named by itself rather than by a number
+        specialIcon: symbol => `/Flag/SpecialIcons/${symbol}.jpg`,
     };
 
     // Mirrors LineAppColors. The exclusivity colour is what tells a line apart - plus, for this
@@ -61,7 +64,13 @@
     const COLORS = {
         STUDENTS: 'תלמידים',
         SEA: 'ים',
+        NIGHT: 'לילה',
     };
+
+    // The one special symbol a line's own data can call for (FlagDataCoreProcessor). Its file is
+    // named by the symbol, and its wording comes from FlagBuilder:SpecialSymbols in the
+    // application's settings - where, as it happens, both read "לילה".
+    const NIGHT_SYMBOL = 'night';
 
     const TEXT = {
         tabTitle: 'תמרור 505',
@@ -403,6 +412,21 @@
     const bucketOf = mode => (mode === 'drop' ? 2 : mode === 'limited' ? 1 : 0);
 
     /**
+     * What the strip's symbol square shows, mirroring WorkAuditRules.SymbolKey and the cell the
+     * flag builder picks: a special symbol outranks the operator's logo. A night line therefore
+     * shares a strip with another operator's night line, and never with that same operator's
+     * daytime line - the square is what the strip is told apart by, and the square is the same.
+     *
+     * The key is tagged rather than bare, so that a symbol's name can never collide with an
+     * operator's - the same reason the server tags its own.
+     */
+    function squareOf(route) {
+        return route.Color === COLORS.NIGHT
+            ? { key: `symbol:${NIGHT_SYMBOL}`, label: COLORS.NIGHT, icon: URLS.specialIcon(NIGHT_SYMBOL) }
+            : { key: `agency:${route.AgencyName ?? ''}`, label: route.AgencyName ?? '', agency: route.AgencyName };
+    }
+
+    /**
      * Mirrors resolveDestMode in the builder: a special mode is wording written into the
      * destination line. A captioned line says only its caption; a seasonal one keeps its
      * destination and gives up its sub-destination.
@@ -444,10 +468,11 @@
             const secondary = resolveDest(secondaryLang, mode, raw.secondary);
 
             // Grouped on what the strip shows, the way the audit card groups its strips
-            // (WorkAuditRules.GroupStrips): the Hebrew panel's text AND the symbol square, which
-            // for an ordinary line is its operator's logo. Two operators to one destination are
-            // two strips on the flag, because each carries its own logo.
-            const key = `${bucketOf(mode)}|${hebrew.dest}|${hebrew.subDest}|${route.AgencyName ?? ''}`;
+            // (WorkAuditRules.GroupStrips): the Hebrew panel's text AND the symbol square. Two
+            // operators to one destination are two strips on the flag, because each carries its
+            // own logo in that square.
+            const square = squareOf(route);
+            const key = `${bucketOf(mode)}|${hebrew.dest}|${hebrew.subDest}|${square.key}`;
 
             let strip = strips.get(key);
 
@@ -458,7 +483,7 @@
                 // destination underneath. On a captioned strip the lines grouped together can
                 // have had different destinations, and the first one stands for them - it is a
                 // starting point for someone about to edit it, not a statement about the group.
-                strip = { bucket: bucketOf(mode), mode, agency: route.AgencyName, hebrew, secondary, raw, routes: [] };
+                strip = { bucket: bucketOf(mode), mode, square, hebrew, secondary, raw, routes: [] };
                 strips.set(key, strip);
             }
 
@@ -794,32 +819,44 @@
         return cell;
     }
 
+    /** An icon that goes quietly when its file is not there, leaving the label to speak. */
+    function prependIcon(cell, src) {
+        const image = create('img');
+        image.src = src;
+        image.alt = '';
+        image.addEventListener('error', () => image.remove(), { once: true });
+
+        cell.prepend(image);
+    }
+
     /**
-     * The operator, named at once and pictured when the icons arrive - the name is what the
-     * reader needs, and waiting on a lookup to show it would hold the whole flag back. An
-     * operator with no icon file, or a lookup that failed, simply reads as its name.
+     * The symbol square: labelled at once and pictured when the picture can be had. The label
+     * is what the reader needs, and waiting on a lookup to show it would hold the whole flag
+     * back. A square whose icon file is missing, or whose lookup failed, reads as its label.
+     *
+     * A special symbol knows its own file; an operator's has to be looked up, because a line
+     * names its operator without numbering it and the file is named by the number.
      */
-    function appendOperatorCell(flag, agency) {
+    function appendSquareCell(flag, square) {
         return appendCell(flag, 'tp505-operator', cell => {
-            if (!agency) {
+            if (!square?.label) {
                 return;
             }
 
-            cell.appendChild(create('span', 'tp505-operator-name', agency));
+            cell.appendChild(create('span', 'tp505-operator-name', square.label));
+
+            if (square.icon) {
+                prependIcon(cell, square.icon);
+
+                return;
+            }
 
             agencyIds().then(ids => {
-                const id = ids.get(normalizeName(agency));
+                const id = ids.get(normalizeName(square.agency));
 
-                if (id === undefined || !cell.isConnected) {
-                    return;
+                if (id !== undefined && cell.isConnected) {
+                    prependIcon(cell, URLS.operatorIcon(id));
                 }
-
-                const image = create('img');
-                image.src = URLS.operatorIcon(id);
-                image.alt = '';
-                image.addEventListener('error', () => image.remove(), { once: true });
-
-                cell.prepend(image);
             });
         });
     }
@@ -914,7 +951,7 @@
     function appendStripRow(flag, state, strip, problems) {
         const { secondaryLang } = state;
 
-        appendOperatorCell(flag, strip.agency);
+        appendSquareCell(flag, strip.square);
 
         appendCell(flag, 'tp505-num', cell => {
             for (const routeNum of strip.routes) {
