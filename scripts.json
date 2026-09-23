@@ -20,7 +20,7 @@
         "gtfs-translations.js"
       ],
       "match": [
-        "/Maintenance/Events/Details/\\d+"
+        "/Events/Details/\\d+"
       ]
     },
     {

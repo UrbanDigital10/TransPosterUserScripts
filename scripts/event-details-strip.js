@@ -3,8 +3,8 @@
 // @namespace    transposter.urban-digital.co.il
 // @version      1.0.0
 // @description  מוסיף לדף פרטי אירוע לחצן "הפק סטריפ" בכל פעולה שיש בה גם קווים וגם יעד, ומפיק את הסטריפ עם תרגום היעד לשפה השנייה של התחנה
-// @match        https://transposter.urban-digital.co.il/Maintenance/Events/Details/*
-// @include      /^https?:\/\/localhost(:\d+)?\/Maintenance\/Events\/Details\/\d+/
+// @match        https://transposter.urban-digital.co.il/Events/Details/*
+// @include      /^https?:\/\/localhost(:\d+)?\/Events\/Details\/\d+/
 // @run-at       document-idle
 // @grant        none
 // ==/UserScript==
