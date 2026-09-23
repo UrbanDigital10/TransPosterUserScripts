@@ -15,19 +15,13 @@
  *
  *   GET  /Stops/Routes/{id}     the routes list behind the "קווים" tab
  *   GET  /Stops/Translation     the stop name in Arabic and English
- *   POST /flag-builder/produce  the endpoint the flag builder posts to
+ *   POST /flag-builder/produce  the flag producer (shared/flag-produce.js)
  *
  * Nothing is written back to the application.
  *
  * The destination rules below mirror the server's FlagRules / FlagRouteRules: drop-only
  * outranks students, which outranks seasonal; a captioned line gives up its sub-destination,
  * a seasonal one gives up only that.
- *
- * How tall a strip has to be is NOT worked out here. Measuring it in the browser, the way the
- * builder's preview does, disagrees with the produce service - a strip the preview called a
- * fit came back 500. So the service is asked instead: the strip is produced at height 1, and
- * on failure again one row taller, up to the 8 rows a flag holds. The first height that
- * answers with a PDF is the one printed.
  */
 
 (function () {
@@ -38,14 +32,9 @@
     const PANE_ID = 'tp505-pane';
     const TAB_ID = 'tp505-tab';
 
-    // A strip is one row high unless its route numbers do not fit. A flag is 8 rows tall, so a
-    // strip the service still refuses at 8 cannot be printed at all.
-    const MAX_ROW_SPAN = 8;
-
     const URLS = {
         routes: id => `/Stops/Routes/${id}`,
         translation: name => `/Stops/Translation?stopName=${encodeURIComponent(name)}`,
-        produce: '/flag-builder/produce',
         busIcon: '/areas/flag-builder/images/stop-head-bus.svg',
 
         // The GTFS explorer's table endpoint, the one generic reader the application offers
@@ -88,11 +77,7 @@
         stopCodeNotFound: 'לא הצלחתי לקרוא את מקט התחנה מהדף, ולכן אי אפשר להפיק ראש תחנה.',
         loadFailed: 'טעינת רשימת הקווים נכשלה',
         produceFailed: 'ההפקה נכשלה',
-        notAllowed: 'נראה שאין לך הרשאה לבנאי הדגל, ובלעדיה אי אפשר להפיק.',
-        serverError: status => `שירות ההפקה החזיר שגיאה ${status}.`,
         trying: span => `מנסה גובה ${span}…`,
-        noFit: status => `ניסיתי להפיק בכל הגבהים מ-1 עד ${MAX_ROW_SPAN} וכולם נכשלו (שגיאה אחרונה: ${status}).`
-            + ' ייתכן שהסטריפ לא נכנס גם בגובה מלא, או ששירות ההפקה אינו זמין.',
         rowSpan: span => (span === 1 ? 'שורה אחת' : `${span} שורות`),
     };
 
@@ -498,82 +483,6 @@
             a.bucket - b.bucket || routeNumAsNumber(a.routes[0]) - routeNumAsNumber(b.routes[0]));
     }
 
-    // ------------------------------------------------------------------ production
-
-    /**
-     * One production attempt. A PDF is the only success. A refusal and a sign-in page answered
-     * as HTML - which is what a user without the flag-builder permission gets - are dead ends;
-     * anything else is a failure the caller may retry one row taller.
-     */
-    async function attemptProduce(type, payload) {
-        const response = await fetch(URLS.produce, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', Accept: 'application/pdf' },
-            body: JSON.stringify({ type, data: JSON.stringify(payload) }),
-        });
-
-        if (response.status === 401 || response.status === 403) {
-            return { fatal: TEXT.notAllowed };
-        }
-
-        if (!response.ok) {
-            return { status: response.status };
-        }
-
-        if (!(response.headers.get('content-type') ?? '').includes('pdf')) {
-            return { fatal: TEXT.notAllowed };
-        }
-
-        return { blob: await response.blob() };
-    }
-
-    function download(blob, fileName) {
-        const url = URL.createObjectURL(blob);
-
-        const link = create('a');
-        link.href = url;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-
-        URL.revokeObjectURL(url);
-    }
-
-    /**
-     * How tall the strip has to be, asked of the service rather than guessed: produced at one
-     * row, and on failure again a row taller. The first height that answers with a PDF is the
-     * one printed, and it is returned so the row can say what it got.
-     *
-     * Each attempt is reported as it starts, so a strip that takes several rounds shows what
-     * it is doing instead of sitting silent.
-     */
-    async function produceStrip(sides, fileName, onAttempt) {
-        let lastStatus = null;
-
-        for (let rowSpan = 1; rowSpan <= MAX_ROW_SPAN; rowSpan++) {
-            onAttempt(rowSpan);
-
-            const result = await attemptProduce('row', sides.map(side => ({ ...side, rowSpan })));
-
-            if (result.fatal) {
-                throw new Error(result.fatal);
-            }
-
-            if (result.blob) {
-                download(result.blob, fileName);
-
-                return rowSpan;
-            }
-
-            lastStatus = result.status;
-        }
-
-        throw new Error(TEXT.noFit(lastStatus));
-    }
-
-    /** The head is one row tall by definition, so it is produced once or not at all. */
     // ------------------------------------------------------------------ handing a part over
 
     /**
@@ -627,17 +536,6 @@
      * half. One panel is what the builder itself produces in single-language mode.
      */
     const panelsFor = (hebrew, secondary) => (secondary === null ? [hebrew] : [hebrew, secondary]);
-
-    async function produceHead(payload, fileName) {
-        const result = await attemptProduce('header', payload);
-
-        if (!result.blob) {
-            throw new Error(result.fatal ?? TEXT.serverError(result.status));
-        }
-
-        download(result.blob, fileName);
-    }
-
 
     // ------------------------------------------------------------------ the tab
 
@@ -933,7 +831,7 @@
                     panel('he', stop.name),
                     state.secondaryName ? panel(secondaryLang, state.secondaryName) : null);
 
-                return produceHead(sides, `ראש-תחנה-${stop.code}.pdf`);
+                return tpProduceHead(sides, `ראש-תחנה-${stop.code}.pdf`);
             }));
 
             // The head can be changed even when the page gave up no code - the builder has a
@@ -985,7 +883,7 @@
                     strip.secondary.dest ? panel(secondaryLang, strip.secondary) : null);
 
                 try {
-                    const rowSpan = await produceStrip(
+                    const rowSpan = await tpProduceStrip(
                         sides,
                         `שורה-${state.stop.code ?? ''}-${strip.routes.join('-')}.pdf`,
                         span => (note.textContent = TEXT.trying(span)));
